@@ -9,6 +9,10 @@ No unreleased changes.
 ## modal-js/v0.3.16, modal-go/v0.0.16
 
 - Added support for getting Sandboxes from an ID.
+- Added support for more parameters to `Sandbox.create()`:
+  - `blockNetwork`: Whether to block all network access from the sandbox.
+  - `cidrAllowlist`: List of CIDRs the sandbox is allowed to access.
+  - `gpu`: GPU reservation for the sandbox (e.g. "A100", "T4:2", "A100-80GB:4").
 
 ## modal-js/v0.3.15, modal-go/v0.0.15
 
