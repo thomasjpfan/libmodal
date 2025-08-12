@@ -3,14 +3,14 @@ name: Publish Release
 on:
   push:
     branches:
-      - main
+      - personal_main
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
+    if: startsWith(github.event.head_commit.message, 'Prepare release for')
     permissions:
       contents: write
-    if: startsWith(github.event.head_commit.message, 'Prepare release for ')
 
     steps:
     - uses: actions/checkout@v5
@@ -23,8 +23,9 @@ jobs:
 
     - uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: "20.x"
         cache: 'npm'
+        registry-url: 'https://registry.npmjs.org'
         cache-dependency-path: modal-js/package-lock.json
 
     - name: Install npm packages
