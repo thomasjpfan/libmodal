@@ -20,7 +20,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with:
-        fetch-tags: true
+        submodules: true
 
     - uses: actions/setup-python@v5
       with:
