@@ -115,17 +115,17 @@ def update_version(args):
 def publish(args):
     """Publish both modal-js and modal-go"""
     check_git_clean()
-    # run_cli(["npm", "publish"], cwd="modal-js")
+    run_cli(["npm", "publish"], cwd="modal-js")
 
     go_version = get_current_go_version_from_changelog(Path("CHANGELOG.md").read_text())
     go_version_str = f"v{go_version['major']}.{go_version['minor']}.{go_version['patch']}"
 
     run_cli(["git", "tag", f"modal-go/{go_version_str}"])
     run_cli(["git", "push", "--tags"])
-    # run_cli(
-    #     ["go", "list", "-m", f"github.com/modal-labs/libmodal/modal-go@{go_version_str}"],
-    #     env={"GOPROXY": "proxy.golang.org"},
-    # )
+    run_cli(
+        ["go", "list", "-m", f"github.com/modal-labs/libmodal/modal-go@{go_version_str}"],
+        env={"GOPROXY": "proxy.golang.org"},
+    )
 
 
 def main():
