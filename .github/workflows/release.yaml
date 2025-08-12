@@ -18,8 +18,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-    - run: Checkout
-      uses: actions/checkout@v5
+    - uses: actions/checkout@v5
 
     - uses: actions/setup-python@v5
       with:
