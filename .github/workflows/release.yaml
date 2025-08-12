@@ -49,8 +49,8 @@ jobs:
 
     - name: Populate metadata for pull request
       run: |
-        PR_TITLE=$(git log -1 --pretty=%B)
-        echo 'PR_TITLE=$PR_TITLE' >> $GITHUB_ENV
+        export PR_TITLE=$(git log -1 --pretty=%B)
+        echo 'PR_TITLE=${PR_TITLE}' >> $GITHUB_ENV
 
     - name: Create Pull Request
       id: cpr
