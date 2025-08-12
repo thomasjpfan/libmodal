@@ -17,6 +17,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+
     steps:
     - uses: actions/checkout@v5
       with:
@@ -56,8 +57,6 @@ jobs:
       with:
         title: ${{ env.PR_TITLE }}
         body: ${{ env.PR_TITLE }}
-        labels: |
-          auto-release
 
     - name: Check outputs
       if: ${{ steps.cpr.outputs.pull-request-number }}
