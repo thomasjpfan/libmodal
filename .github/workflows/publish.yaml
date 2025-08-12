@@ -3,14 +3,14 @@ name: Publish Release
 on:
   push:
     branches:
-      - main
+      - personal_main
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
+    if: startsWith(github.event.head_commit.message, 'Prepare release for')
     permissions:
       contents: write
-    if: startsWith(github.event.head_commit.message, 'Prepare release for ')
 
     steps:
     - uses: actions/checkout@v5
