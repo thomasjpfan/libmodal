@@ -31,7 +31,7 @@ jobs:
 
     - name: Make release commits
       run: |
-        python ci/release.py ${{ inputs.update }}
+        python ci/release.py version ${{ inputs.update }}
 
     # - name: Create Pull Request
     #   id: cpr
