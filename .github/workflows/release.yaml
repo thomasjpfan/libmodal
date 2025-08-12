@@ -1,0 +1,45 @@
+name: Open PR for release
+
+on:
+  workflow_dispatch:
+    inputs:
+      update:
+        required: true
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+jobs:
+  open-pr-for-release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - run: Checkout
+      uses: actions/checkout@v5
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Config git user
+      run: |
+        git config user.name "${GITHUB_ACTOR}"
+        git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+    - name: Make release commits
+      run: |
+        python ci/release.py ${{ inputs.update }}
+
+    # - name: Create Pull Request
+    #   id: cpr
+    #   uses: peter-evans/create-pull-request@v7
+
+    # - name: Check outputs
+    #   if: ${{ steps.cpr.outputs.pull-request-number }}
+    #   run: |
+    #     echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+    #     echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
