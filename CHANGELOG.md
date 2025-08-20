@@ -24,6 +24,7 @@ Both client libraries are pre-1.0, and they have separate versioning.
 - Added support for `Function.updateAutoscaler()` (JS) / `Function.UpdateAutoscaler()` (Go).
 - Added support for `Function.getWebURL()` (JS) / `Function.GetWebURL()` (Go).
 - Added support for `Volume.readOnly()` (JS) / `Volume.ReadOnly()` (Go).
+- Added support for setting tags on Sandboxes, and for listing Sandboxes (by tag).
 
 ## modal-js/v0.3.16, modal-go/v0.0.16
 
