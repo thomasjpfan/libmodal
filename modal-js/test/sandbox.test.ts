@@ -1,10 +1,11 @@
-import { App, Volume, Sandbox, Secret } from "modal";
+import { App, Volume, Sandbox, Secret, Image } from "modal";
 import { parseGpuConfig } from "../src/app";
 import { expect, test, onTestFinished } from "vitest";
 
 test("CreateOneSandbox", async () => {
   const app = await App.lookup("libmodal-test", { createIfMissing: true });
   expect(app.appId).toBeTruthy();
+  expect(app.name).toBe("libmodal-test");
 
   const image = await app.imageFromRegistry("alpine:3.21");
   expect(image.imageId).toBeTruthy();
@@ -168,6 +169,28 @@ test("SandboxWithVolume", async () => {
 
   const exitCode = await sandbox.wait();
   expect(exitCode).toBe(0);
+});
+
+test("SandboxWithReadOnlyVolume", async () => {
+  const app = await App.lookup("libmodal-test", { createIfMissing: true });
+  const image = await Image.fromRegistry("alpine:3.21");
+
+  const volume = await Volume.fromName("libmodal-test-sandbox-volume", {
+    createIfMissing: true,
+  });
+
+  const readOnlyVolume = volume.readOnly();
+  expect(readOnlyVolume.isReadOnly).toBe(true);
+
+  const sb = await app.createSandbox(image, {
+    command: ["sh", "-c", "echo 'test' > /mnt/test/test.txt"],
+    volumes: { "/mnt/test": readOnlyVolume },
+  });
+
+  expect(await sb.wait()).toBe(1);
+  expect(await sb.stderr.readText()).toContain("Read-only file system");
+
+  await sb.terminate();
 });
 
 test("SandboxWithTunnels", async () => {
@@ -351,4 +374,86 @@ test("SandboxWithWorkdirValidation", async () => {
       workdir: "relative/path",
     }),
   ).rejects.toThrow("workdir must be an absolute path, got: relative/path");
+});
+
+test("SandboxSetTagsAndList", async () => {
+  const app = await App.lookup("libmodal-test", { createIfMissing: true });
+  const image = await app.imageFromRegistry("alpine:3.21");
+
+  const sb = await app.createSandbox(image);
+  onTestFinished(async () => {
+    await sb.terminate();
+  });
+
+  const unique = `${Math.random()}`;
+
+  const foundBefore: string[] = [];
+  for await (const s of Sandbox.list({ tags: { "test-key": unique } })) {
+    foundBefore.push(s.sandboxId);
+  }
+  expect(foundBefore.length).toBe(0);
+
+  await sb.setTags({ "test-key": unique });
+
+  const foundAfter: string[] = [];
+  for await (const s of Sandbox.list({ tags: { "test-key": unique } })) {
+    foundAfter.push(s.sandboxId);
+  }
+  expect(foundAfter).toEqual([sb.sandboxId]);
+});
+
+test("SandboxSetMultipleTagsAndList", async () => {
+  const app = await App.lookup("libmodal-test", { createIfMissing: true });
+  const image = await app.imageFromRegistry("alpine:3.21");
+
+  const sb = await app.createSandbox(image);
+  onTestFinished(async () => {
+    await sb.terminate();
+  });
+
+  const tagA = `A-${Math.random()}`;
+  const tagB = `B-${Math.random()}`;
+  const tagC = `C-${Math.random()}`;
+
+  await sb.setTags({ "key-a": tagA, "key-b": tagB, "key-c": tagC });
+
+  let ids: string[] = [];
+  for await (const s of Sandbox.list({ tags: { "key-a": tagA } })) {
+    ids.push(s.sandboxId);
+  }
+  expect(ids).toEqual([sb.sandboxId]);
+
+  ids = [];
+  for await (const s of Sandbox.list({
+    tags: { "key-a": tagA, "key-b": tagB },
+  })) {
+    ids.push(s.sandboxId);
+  }
+  expect(ids).toEqual([sb.sandboxId]);
+
+  ids = [];
+  for await (const s of Sandbox.list({
+    tags: { "key-a": tagA, "key-b": tagB, "key-d": "not-set" },
+  })) {
+    ids.push(s.sandboxId);
+  }
+  expect(ids.length).toBe(0);
+});
+
+test("SandboxListByAppId", async () => {
+  const app = await App.lookup("libmodal-test", { createIfMissing: true });
+  const image = await app.imageFromRegistry("alpine:3.21");
+
+  const sb = await app.createSandbox(image);
+  onTestFinished(async () => {
+    await sb.terminate();
+  });
+
+  let count = 0;
+  for await (const s of Sandbox.list({ appId: app.appId })) {
+    expect(s.sandboxId).toMatch(/^sb-/);
+    count++;
+    if (count > 0) break;
+  }
+  expect(count).toBeGreaterThan(0);
 });

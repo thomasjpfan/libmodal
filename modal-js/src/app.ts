@@ -2,7 +2,6 @@ import { ClientError, Status } from "nice-grpc";
 import {
   NetworkAccess_NetworkAccessType,
   ObjectCreationType,
-  RegistryAuthType,
   PortSpec,
   TunnelType,
   NetworkAccess,
@@ -13,7 +12,7 @@ import {
 } from "../proto/modal_proto/api";
 import { client } from "./client";
 import { environmentName } from "./config";
-import { fromRegistryInternal, type Image } from "./image";
+import { Image } from "./image";
 import { Sandbox } from "./sandbox";
 import { NotFoundError } from "./errors";
 import { Secret } from "./secret";
@@ -134,10 +133,12 @@ export function parseGpuConfig(gpu: string | undefined): GPUConfig | undefined {
 /** Represents a deployed Modal App. */
 export class App {
   readonly appId: string;
+  readonly name?: string;
 
   /** @ignore */
-  constructor(appId: string) {
+  constructor(appId: string, name?: string) {
     this.appId = appId;
+    this.name = name;
   }
 
   /** Lookup a deployed app by name, or create if it does not exist. */
@@ -150,7 +151,7 @@ export class App {
           ? ObjectCreationType.OBJECT_CREATION_TYPE_CREATE_IF_MISSING
           : ObjectCreationType.OBJECT_CREATION_TYPE_UNSPECIFIED,
       });
-      return new App(resp.appId);
+      return new App(resp.appId, name);
     } catch (err) {
       if (err instanceof ClientError && err.code === Status.NOT_FOUND)
         throw new NotFoundError(`App '${name}' not found`);
@@ -170,6 +171,7 @@ export class App {
         `Timeout must be a multiple of 1000ms, got ${options.timeout}`,
       );
     }
+    await image._build(this.appId);
 
     if (options.workdir && !options.workdir.startsWith("/")) {
       throw new Error(
@@ -182,7 +184,7 @@ export class App {
           volumeId: volume.volumeId,
           mountPath,
           allowBackgroundCommits: true,
-          readOnly: false,
+          readOnly: volume.isReadOnly,
         }))
       : [];
 
@@ -280,52 +282,27 @@ export class App {
     return new Sandbox(createResp.sandboxId);
   }
 
+  /**
+   * @deprecated Use `Image.fromRegistry` instead.
+   */
   async imageFromRegistry(tag: string, secret?: Secret): Promise<Image> {
-    let imageRegistryConfig;
-    if (secret) {
-      if (!(secret instanceof Secret)) {
-        throw new TypeError(
-          "secret must be a reference to an existing Secret, e.g. `await Secret.fromName('my_secret')`",
-        );
-      }
-      imageRegistryConfig = {
-        registryAuthType: RegistryAuthType.REGISTRY_AUTH_TYPE_STATIC_CREDS,
-        secretId: secret.secretId,
-      };
-    }
-    return await fromRegistryInternal(this.appId, tag, imageRegistryConfig);
+    return await Image.fromRegistry(tag, secret)._build(this.appId);
   }
 
+  /**
+   * @deprecated Use `Image.fromAwsEcr` instead.
+   */
   async imageFromAwsEcr(tag: string, secret: Secret): Promise<Image> {
-    if (!(secret instanceof Secret)) {
-      throw new TypeError(
-        "secret must be a reference to an existing Secret, e.g. `await Secret.fromName('my_secret')`",
-      );
-    }
-
-    const imageRegistryConfig = {
-      registryAuthType: RegistryAuthType.REGISTRY_AUTH_TYPE_AWS,
-      secretId: secret.secretId,
-    };
-
-    return await fromRegistryInternal(this.appId, tag, imageRegistryConfig);
+    return await Image.fromAwsEcr(tag, secret)._build(this.appId);
   }
 
+  /**
+   * @deprecated Use `Image.fromGcpArtifactRegistry` instead.
+   */
   async imageFromGcpArtifactRegistry(
     tag: string,
     secret: Secret,
   ): Promise<Image> {
-    if (!(secret instanceof Secret)) {
-      throw new TypeError(
-        "secret must be a reference to an existing Secret, e.g. `await Secret.fromName('my_secret')`",
-      );
-    }
-
-    const imageRegistryConfig = {
-      registryAuthType: RegistryAuthType.REGISTRY_AUTH_TYPE_GCP,
-      secretId: secret.secretId,
-    };
-
-    return await fromRegistryInternal(this.appId, tag, imageRegistryConfig);
+    return await Image.fromGcpArtifactRegistry(tag, secret)._build(this.appId);
   }
 }

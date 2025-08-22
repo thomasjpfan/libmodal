@@ -1,5 +1,5 @@
 import { Function_, NotFoundError } from "modal";
-import { expect, test } from "vitest";
+import { expect, onTestFinished, test } from "vitest";
 
 test("FunctionCall", async () => {
   const function_ = await Function_.lookup(
@@ -42,4 +42,96 @@ test("FunctionCallInputPlane", async () => {
   );
   const result = await function_.remote(["hello"]);
   expect(result).toBe("output: hello");
+});
+
+test("FunctionGetCurrentStats", async () => {
+  const { MockGrpc } = await import("../test-support/grpc_mock");
+  const mock = await MockGrpc.install();
+  onTestFinished(async () => {
+    await mock.uninstall();
+  });
+
+  mock.handleUnary("/FunctionGetCurrentStats", (req) => {
+    expect(req).toMatchObject({ functionId: "fid-stats" });
+    return { backlog: 3, numTotalTasks: 7 };
+  });
+
+  const { Function_ } = await import("../src/function");
+  const function_ = new Function_("fid-stats");
+  const stats = await function_.getCurrentStats();
+  expect(stats).toEqual({ backlog: 3, numTotalRunners: 7 });
+});
+
+test("FunctionUpdateAutoscaler", async () => {
+  const { MockGrpc } = await import("../test-support/grpc_mock");
+  const mock = await MockGrpc.install();
+  onTestFinished(async () => {
+    await mock.uninstall();
+  });
+
+  mock.handleUnary("/FunctionUpdateSchedulingParams", (req) => {
+    expect(req).toMatchObject({
+      functionId: "fid-auto",
+      settings: {
+        minContainers: 1,
+        maxContainers: 10,
+        bufferContainers: 2,
+        scaledownWindow: 300,
+      },
+    });
+    return {};
+  });
+
+  const { Function_ } = await import("../src/function");
+  const function_ = new Function_("fid-auto");
+  await function_.updateAutoscaler({
+    minContainers: 1,
+    maxContainers: 10,
+    bufferContainers: 2,
+    scaledownWindow: 300,
+  });
+
+  mock.handleUnary("/FunctionUpdateSchedulingParams", (req) => {
+    expect(req).toMatchObject({
+      functionId: "fid-auto",
+      settings: { minContainers: 2 },
+    });
+    return {};
+  });
+
+  await function_.updateAutoscaler({ minContainers: 2 });
+});
+
+test("FunctionGetWebUrl", async () => {
+  const { MockGrpc } = await import("../test-support/grpc_mock");
+  const mock = await MockGrpc.install();
+  onTestFinished(async () => {
+    await mock.uninstall();
+  });
+
+  mock.handleUnary("FunctionGet", (req) => {
+    expect(req).toMatchObject({
+      appName: "libmodal-test-support",
+      objectTag: "web_endpoint",
+    });
+    return {
+      functionId: "fid-web",
+      handleMetadata: { webUrl: "https://endpoint.internal" },
+    };
+  });
+
+  const { Function_ } = await import("../src/function");
+  const web_endpoint = await Function_.lookup(
+    "libmodal-test-support",
+    "web_endpoint",
+  );
+  expect(await web_endpoint.getWebUrl()).toBe("https://endpoint.internal");
+});
+
+test("FunctionGetWebUrlOnNonWebFunction", async () => {
+  const function_ = await Function_.lookup(
+    "libmodal-test-support",
+    "echo_string",
+  );
+  expect(await function_.getWebUrl()).toBeUndefined();
 });
