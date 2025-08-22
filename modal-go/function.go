@@ -32,11 +32,26 @@ func timeNowSeconds() float64 {
 	return float64(time.Now().UnixNano()) / 1e9
 }
 
+// FunctionStats represents statistics for a running Function.
+type FunctionStats struct {
+	Backlog         int
+	NumTotalRunners int
+}
+
+// UpdateAutoscalerOptions contains options for overriding a Function's autoscaler behavior.
+type UpdateAutoscalerOptions struct {
+	MinContainers    *uint32
+	MaxContainers    *uint32
+	BufferContainers *uint32
+	ScaledownWindow  *uint32
+}
+
 // Function references a deployed Modal Function.
 type Function struct {
 	FunctionId    string
 	MethodName    *string // used for class methods
 	inputPlaneUrl string  // if empty, use control plane
+	webURL        string  // web URL if this function is a web endpoint
 	ctx           context.Context
 }
 
@@ -65,12 +80,14 @@ func FunctionLookup(ctx context.Context, appName string, name string, options *L
 	}
 
 	var inputPlaneUrl string
+	var webURL string
 	if meta := resp.GetHandleMetadata(); meta != nil {
 		if url := meta.GetInputPlaneUrl(); url != "" {
 			inputPlaneUrl = url
 		}
+		webURL = meta.GetWebUrl()
 	}
-	return &Function{FunctionId: resp.GetFunctionId(), inputPlaneUrl: inputPlaneUrl, ctx: ctx}, nil
+	return &Function{FunctionId: resp.GetFunctionId(), inputPlaneUrl: inputPlaneUrl, webURL: webURL, ctx: ctx}, nil
 }
 
 // Serialize Go data types to the Python pickle format.
@@ -173,6 +190,45 @@ func (f *Function) Spawn(args []any, kwargs map[string]any) (*FunctionCall, erro
 		ctx:            f.ctx,
 	}
 	return &functionCall, nil
+}
+
+// GetCurrentStats returns a FunctionStats object with statistics about the Function.
+func (f *Function) GetCurrentStats() (*FunctionStats, error) {
+	resp, err := client.FunctionGetCurrentStats(f.ctx, pb.FunctionGetCurrentStatsRequest_builder{
+		FunctionId: f.FunctionId,
+	}.Build())
+	if err != nil {
+		return nil, err
+	}
+
+	return &FunctionStats{
+		Backlog:         int(resp.GetBacklog()),
+		NumTotalRunners: int(resp.GetNumTotalTasks()),
+	}, nil
+}
+
+// UpdateAutoscaler overrides the current autoscaler behavior for this Function.
+func (f *Function) UpdateAutoscaler(opts UpdateAutoscalerOptions) error {
+	settings := pb.AutoscalerSettings_builder{
+		MinContainers:    opts.MinContainers,
+		MaxContainers:    opts.MaxContainers,
+		BufferContainers: opts.BufferContainers,
+		ScaledownWindow:  opts.ScaledownWindow,
+	}.Build()
+
+	_, err := client.FunctionUpdateSchedulingParams(f.ctx, pb.FunctionUpdateSchedulingParamsRequest_builder{
+		FunctionId:           f.FunctionId,
+		WarmPoolSizeOverride: 0, // Deprecated field, always set to 0
+		Settings:             settings,
+	}.Build())
+
+	return err
+}
+
+// GetWebURL returns the URL of a Function running as a web endpoint.
+// Returns empty string if this function is not a web endpoint.
+func (f *Function) GetWebURL() string {
+	return f.webURL
 }
 
 // blobUpload uploads a blob to storage and returns its ID.

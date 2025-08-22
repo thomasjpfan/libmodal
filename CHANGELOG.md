@@ -4,6 +4,10 @@ Both client libraries are pre-1.0, and they have separate versioning.
 
 ## Unreleased
 
+- Add some changes here
+
+## modal-js/v0.3.17, modal-go/v0.0.17
+
 - Added support for more parameters to `Sandbox.create()`:
   - `blockNetwork`: Whether to block all network access from the sandbox.
   - `cidrAllowlist`: List of CIDRs the sandbox is allowed to access.
@@ -13,11 +17,22 @@ Both client libraries are pre-1.0, and they have separate versioning.
   - `verbose`: Enable verbose logging.
   - `proxy`: Connect a Modal Proxy to a Sandbox.
   - `workdir`: Set the working directory.
+- Added support for mounting `CloudBucketMount`s to Sandboxes.
+- Added top level for Image objects that are lazy. The images are built when creating a sandbox.
+  - `Image.fromRegistry` in typescript and `NewImageFromRegistry` in golang.
+  - `Image.fromAwsEcr` in typescript and `NewImageFromAwsEcr` in golang.
+  - `Image.fromGcpArtifactRegistry` in typescript and `NewImageFromGcpArtifactRegistry` in golang.
+- Added `Secret.fromObject()` (JS) / `SecretFromMap()` (Go) to create a Secret from key-value pairs (like `from_dict()` in Python).
+- Added `name` field to `App`s, `Sandboxe`s, `Secret`s, `Volume`s, and `Queue`s.
+- Added support for `Function.getCurrentStats()` (JS) / `Function.GetCurrentStats()` (Go).
+- Added support for `Function.updateAutoscaler()` (JS) / `Function.UpdateAutoscaler()` (Go).
+- Added support for `Function.getWebURL()` (JS) / `Function.GetWebURL()` (Go).
+- Added support for `Volume.readOnly()` (JS) / `Volume.ReadOnly()` (Go).
+- Added support for setting tags on Sandboxes, and for listing Sandboxes (by tag).
 
 ## modal-js/v0.3.16, modal-go/v0.0.16
 
 - Added support for getting Sandboxes from an ID.
-- Added support for mounting `CloudBucketMount`s to Sandboxes.
 
 ## modal-js/v0.3.15, modal-go/v0.0.15
 

@@ -26,17 +26,38 @@ const maxObjectSizeBytes = 2 * 1024 * 1024; // 2 MiB
 // From: client/modal/_functions.py
 const maxSystemRetries = 8;
 
+/** Simple data structure storing stats for a running Function. */
+export interface FunctionStats {
+  backlog: number;
+  numTotalRunners: number;
+}
+
+/** Options for overriding a Function's autoscaler behavior. */
+export interface UpdateAutoscalerOptions {
+  minContainers?: number;
+  maxContainers?: number;
+  bufferContainers?: number;
+  scaledownWindow?: number;
+}
+
 /** Represents a deployed Modal Function, which can be invoked remotely. */
 export class Function_ {
   readonly functionId: string;
   readonly methodName?: string;
   #inputPlaneUrl?: string;
+  #webUrl?: string;
 
   /** @ignore */
-  constructor(functionId: string, methodName?: string, inputPlaneUrl?: string) {
+  constructor(
+    functionId: string,
+    methodName?: string,
+    inputPlaneUrl?: string,
+    webUrl?: string,
+  ) {
     this.functionId = functionId;
     this.methodName = methodName;
     this.#inputPlaneUrl = inputPlaneUrl;
+    this.#webUrl = webUrl;
   }
 
   static async lookup(
@@ -54,6 +75,7 @@ export class Function_ {
         resp.functionId,
         undefined,
         resp.handleMetadata?.inputPlaneUrl,
+        resp.handleMetadata?.webUrl,
       );
     } catch (err) {
       if (err instanceof ClientError && err.code === Status.NOT_FOUND)
@@ -113,6 +135,40 @@ export class Function_ {
       FunctionCallInvocationType.FUNCTION_CALL_INVOCATION_TYPE_ASYNC,
     );
     return new FunctionCall(invocation.functionCallId);
+  }
+
+  // Returns statistics about the Function.
+  async getCurrentStats(): Promise<FunctionStats> {
+    const resp = await client.functionGetCurrentStats(
+      { functionId: this.functionId },
+      { timeout: 10000 },
+    );
+    return {
+      backlog: resp.backlog,
+      numTotalRunners: resp.numTotalTasks,
+    };
+  }
+
+  // Overrides the current autoscaler behavior for this Function.
+  async updateAutoscaler(options: UpdateAutoscalerOptions): Promise<void> {
+    await client.functionUpdateSchedulingParams({
+      functionId: this.functionId,
+      warmPoolSizeOverride: 0, // Deprecated field, always set to 0
+      settings: {
+        minContainers: options.minContainers,
+        maxContainers: options.maxContainers,
+        bufferContainers: options.bufferContainers,
+        scaledownWindow: options.scaledownWindow,
+      },
+    });
+  }
+
+  /**
+   * URL of a Function running as a web endpoint.
+   * @returns The web URL if this function is a web endpoint, otherwise undefined
+   */
+  async getWebUrl(): Promise<string | undefined> {
+    return this.#webUrl || undefined;
   }
 
   async #createInput(

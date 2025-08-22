@@ -15,6 +15,7 @@ import (
 // App references a deployed Modal App.
 type App struct {
 	AppId string
+	Name  string
 	ctx   context.Context
 }
 
@@ -118,13 +119,18 @@ func AppLookup(ctx context.Context, name string, options *LookupOptions) (*App, 
 		return nil, err
 	}
 
-	return &App{AppId: resp.GetAppId(), ctx: ctx}, nil
+	return &App{AppId: resp.GetAppId(), Name: name, ctx: ctx}, nil
 }
 
 // CreateSandbox creates a new Sandbox in the App with the specified image and options.
 func (app *App) CreateSandbox(image *Image, options *SandboxOptions) (*Sandbox, error) {
 	if options == nil {
 		options = &SandboxOptions{}
+	}
+
+	image, err := image.build(app)
+	if err != nil {
+		return nil, err
 	}
 
 	gpuConfig, err := parseGPUConfig(options.GPU)
@@ -144,7 +150,7 @@ func (app *App) CreateSandbox(image *Image, options *SandboxOptions) (*Sandbox, 
 				VolumeId:               volume.VolumeId,
 				MountPath:              mountPath,
 				AllowBackgroundCommits: true,
-				ReadOnly:               false,
+				ReadOnly:               volume.IsReadOnly(),
 			}.Build())
 		}
 	}
@@ -261,34 +267,22 @@ func (app *App) CreateSandbox(image *Image, options *SandboxOptions) (*Sandbox, 
 }
 
 // ImageFromRegistry creates an Image from a registry tag.
+//
+// Deprecated: ImageFromRegistry is deprecated, use modal.NewImageFromRegistry instead
 func (app *App) ImageFromRegistry(tag string, options *ImageFromRegistryOptions) (*Image, error) {
-	if options == nil {
-		options = &ImageFromRegistryOptions{}
-	}
-	var imageRegistryConfig *pb.ImageRegistryConfig
-	if options.Secret != nil {
-		imageRegistryConfig = pb.ImageRegistryConfig_builder{
-			RegistryAuthType: pb.RegistryAuthType_REGISTRY_AUTH_TYPE_STATIC_CREDS,
-			SecretId:         options.Secret.SecretId,
-		}.Build()
-	}
-	return fromRegistryInternal(app, tag, imageRegistryConfig)
+	return NewImageFromRegistry(tag, options).build(app)
 }
 
 // ImageFromAwsEcr creates an Image from an AWS ECR tag.
+//
+// Deprecated: ImageFromAwsEcr is deprecated, use modal.NewImageFromAwsEcr instead
 func (app *App) ImageFromAwsEcr(tag string, secret *Secret) (*Image, error) {
-	imageRegistryConfig := pb.ImageRegistryConfig_builder{
-		RegistryAuthType: pb.RegistryAuthType_REGISTRY_AUTH_TYPE_AWS,
-		SecretId:         secret.SecretId,
-	}.Build()
-	return fromRegistryInternal(app, tag, imageRegistryConfig)
+	return NewImageFromAwsEcr(tag, secret).build(app)
 }
 
 // ImageFromGcpArtifactRegistry creates an Image from a GCP Artifact Registry tag.
+//
+// Deprecated: ImageFromGcpArtifactRegistry is deprecated, use modal.NewImageFromGcpArtifactRegistry instead
 func (app *App) ImageFromGcpArtifactRegistry(tag string, secret *Secret) (*Image, error) {
-	imageRegistryConfig := pb.ImageRegistryConfig_builder{
-		RegistryAuthType: pb.RegistryAuthType_REGISTRY_AUTH_TYPE_GCP,
-		SecretId:         secret.SecretId,
-	}.Build()
-	return fromRegistryInternal(app, tag, imageRegistryConfig)
+	return NewImageFromGcpArtifactRegistry(tag, secret).build(app)
 }

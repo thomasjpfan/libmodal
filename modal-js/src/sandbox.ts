@@ -5,6 +5,7 @@ import {
   GenericResult_GenericStatus,
 } from "../proto/modal_proto/api";
 import { client, isRetryableGrpc } from "./client";
+import { environmentName } from "./config";
 import {
   runFilesystemExec,
   SandboxFile,
@@ -35,6 +36,16 @@ export type StdioBehavior = "pipe" | "ignore";
  * means the data will be read as raw bytes (Uint8Array).
  */
 export type StreamMode = "text" | "binary";
+
+/** Options for `Sandbox.list()`. */
+export type SandboxListOptions = {
+  /** Filter sandboxes for a specific app. */
+  appId?: string;
+  /** Only return sandboxes that include all specified tags. */
+  tags?: Record<string, string>;
+  /** Override environment for the request; defaults to current profile. */
+  environment?: string;
+};
 
 /** Options to configure a `Sandbox.exec()` operation. */
 export type ExecOptions = {
@@ -112,6 +123,26 @@ export class Sandbox {
         outputStreamSb(sandboxId, FileDescriptor.FILE_DESCRIPTOR_STDERR),
       ).pipeThrough(new TextDecoderStream()),
     );
+  }
+
+  /** Set tags (key-value pairs) on the Sandbox. Tags can be used to filter results in `Sandbox.list`. */
+  async setTags(tags: Record<string, string>): Promise<void> {
+    const tagsList = Object.entries(tags).map(([tagName, tagValue]) => ({
+      tagName,
+      tagValue,
+    }));
+    try {
+      await client.sandboxTagsSet({
+        environmentName: environmentName(),
+        sandboxId: this.sandboxId,
+        tags: tagsList,
+      });
+    } catch (err) {
+      if (err instanceof ClientError && err.code === Status.INVALID_ARGUMENT) {
+        throw new InvalidError(err.details || err.message);
+      }
+      throw err;
+    }
   }
 
   /** Returns a running Sandbox object from an ID.
@@ -220,7 +251,7 @@ export class Sandbox {
     while (true) {
       const resp = await client.sandboxWait({
         sandboxId: this.sandboxId,
-        timeout: 55,
+        timeout: 10,
       });
       if (resp.result) {
         return Sandbox.#getReturnCode(resp.result)!;
@@ -289,7 +320,7 @@ export class Sandbox {
       throw new Error("Sandbox snapshot response missing image ID");
     }
 
-    return new Image(resp.imageId);
+    return new Image(resp.imageId, "");
   }
 
   /**
@@ -304,6 +335,50 @@ export class Sandbox {
     });
 
     return Sandbox.#getReturnCode(resp.result);
+  }
+
+  /**
+   * List all Sandboxes for the current Environment or App ID (if specified).
+   * If tags are specified, only Sandboxes that have at least those tags are returned.
+   */
+  static async *list(
+    options: SandboxListOptions = {},
+  ): AsyncGenerator<Sandbox, void, unknown> {
+    const env = environmentName(options.environment);
+    const tagsList = options.tags
+      ? Object.entries(options.tags).map(([tagName, tagValue]) => ({
+          tagName,
+          tagValue,
+        }))
+      : [];
+
+    let beforeTimestamp: number | undefined = undefined;
+    while (true) {
+      try {
+        const resp = await client.sandboxList({
+          appId: options.appId,
+          beforeTimestamp,
+          environmentName: env,
+          includeFinished: false,
+          tags: tagsList,
+        });
+        if (!resp.sandboxes || resp.sandboxes.length === 0) {
+          return;
+        }
+        for (const info of resp.sandboxes) {
+          yield new Sandbox(info.id);
+        }
+        beforeTimestamp = resp.sandboxes[resp.sandboxes.length - 1].createdAt;
+      } catch (err) {
+        if (
+          err instanceof ClientError &&
+          err.code === Status.INVALID_ARGUMENT
+        ) {
+          throw new InvalidError(err.details || err.message);
+        }
+        throw err;
+      }
+    }
   }
 
   static #getReturnCode(result: GenericResult | undefined): number | null {

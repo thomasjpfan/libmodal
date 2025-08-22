@@ -13,10 +13,14 @@ export type VolumeFromNameOptions = {
 /** Volumes provide persistent storage that can be mounted in Modal functions. */
 export class Volume {
   readonly volumeId: string;
+  readonly name?: string;
+  private _readOnly: boolean = false;
 
   /** @ignore */
-  constructor(volumeId: string) {
+  constructor(volumeId: string, name?: string, readOnly: boolean = false) {
     this.volumeId = volumeId;
+    this.name = name;
+    this._readOnly = readOnly;
   }
 
   static async fromName(
@@ -31,11 +35,20 @@ export class Volume {
           ? ObjectCreationType.OBJECT_CREATION_TYPE_CREATE_IF_MISSING
           : ObjectCreationType.OBJECT_CREATION_TYPE_UNSPECIFIED,
       });
-      return new Volume(resp.volumeId);
+      return new Volume(resp.volumeId, name);
     } catch (err) {
       if (err instanceof ClientError && err.code === Status.NOT_FOUND)
         throw new NotFoundError(err.details);
       throw err;
     }
+  }
+
+  /** Configure Volume to mount as read-only. */
+  readOnly(): Volume {
+    return new Volume(this.volumeId, this.name, true);
+  }
+
+  get isReadOnly(): boolean {
+    return this._readOnly;
   }
 }

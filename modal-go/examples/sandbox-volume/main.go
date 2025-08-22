@@ -19,10 +19,7 @@ func main() {
 		log.Fatalf("Failed to lookup app: %v", err)
 	}
 
-	image, err := app.ImageFromRegistry("alpine:3.21", nil)
-	if err != nil {
-		log.Fatalf("Failed to create image: %v", err)
-	}
+	image := modal.NewImageFromRegistry("alpine:3.21", nil)
 
 	volume, err := modal.VolumeFromName(ctx, "libmodal-example-volume", &modal.VolumeFromNameOptions{
 		CreateIfMissing: true,
@@ -53,9 +50,8 @@ func main() {
 	fmt.Printf("Writer finished with exit code: %d\n", exitCode)
 
 	readerSandbox, err := app.CreateSandbox(image, &modal.SandboxOptions{
-		Command: []string{"sh", "-c", "cat /mnt/volume/message.txt"},
 		Volumes: map[string]*modal.Volume{
-			"/mnt/volume": volume,
+			"/mnt/volume": volume.ReadOnly(),
 		},
 	})
 	if err != nil {
@@ -63,11 +59,37 @@ func main() {
 	}
 	fmt.Printf("Reader sandbox: %s\n", readerSandbox.SandboxId)
 
-	output, err := io.ReadAll(readerSandbox.Stdout)
+	rp, err := readerSandbox.Exec([]string{"cat", "/mnt/volume/message.txt"}, modal.ExecOptions{
+		Stdout: modal.Pipe,
+	})
+	if err != nil {
+		log.Fatalf("Failed to exec read command: %v", err)
+	}
+	readOutput, err := io.ReadAll(rp.Stdout)
 	if err != nil {
 		log.Fatalf("Failed to read output: %v", err)
 	}
-	fmt.Printf("Reader output: %s", string(output))
+	fmt.Printf("Reader output: %s", string(readOutput))
+
+	wp, err := readerSandbox.Exec([]string{"sh", "-c", "echo 'This should fail' >> /mnt/volume/message.txt"}, modal.ExecOptions{
+		Stdout: modal.Pipe,
+		Stderr: modal.Pipe,
+	})
+	if err != nil {
+		log.Fatalf("Failed to exec write command: %v", err)
+	}
+
+	writeExitCode, err := wp.Wait()
+	if err != nil {
+		log.Fatalf("Failed to wait for write process: %v", err)
+	}
+	writeStderr, err := io.ReadAll(wp.Stderr)
+	if err != nil {
+		log.Fatalf("Failed to read stderr: %v", err)
+	}
+
+	fmt.Printf("Write attempt exit code: %d\n", writeExitCode)
+	fmt.Printf("Write attempt stderr: %s", string(writeStderr))
 
 	if err := writerSandbox.Terminate(); err != nil {
 		log.Printf("Failed to terminate writer sandbox: %v", err)
